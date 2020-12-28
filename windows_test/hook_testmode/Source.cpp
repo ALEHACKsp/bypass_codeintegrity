@@ -28,12 +28,6 @@ NTSTATUS hk_NtQuerySystemInformation(ULONG SystemInformationClass, PVOID SystemI
 	Integrity.CodeIntegrityOptions = 1;
 	Integrity.Length = 0x8;
 
-	//PVOID espaco = VirtualAlloc(NULL,0xC,)
-
-	//PSYSTEM_CODEINTEGRITY_INFORMATION FalseInt = (PSYSTEM_CODEINTEGRITY_INFORMATION)0x70000;
-	//FalseInt->CodeIntegrityOptions = 1;
-	//FalseInt->Length = 0x8;
-
 	status = pfn_NtQuerySystemInformation(SystemInformationClass, &Integrity, SystemInformationLength, ReturnLength);
 
 	if (SystemInformationClass == 0x67)
@@ -45,9 +39,9 @@ NTSTATUS hk_NtQuerySystemInformation(ULONG SystemInformationClass, PVOID SystemI
 			printf("[hook] Mudando protecao: \n");	
 
 			PSYSTEM_CODEINTEGRITY_INFORMATION false_code_integrity = (PSYSTEM_CODEINTEGRITY_INFORMATION)SystemInformation;
-			false_code_integrity->CodeIntegrityOptions = 0x1;
-			false_code_integrity->Length = Integrity.Length;
-
+			false_code_integrity->CodeIntegrityOptions = 0x1; // 0x1 == CODEINTEGRITY_OPTION_ENABLED
+			false_code_integrity->Length = Integrity.Length; // Return 0riginal Length
+			printf("_____________________________\n\n");
 			return pfn_NtQuerySystemInformation(SystemInformationClass, &false_code_integrity, SystemInformationLength, ReturnLength);
 
 		}
@@ -55,6 +49,23 @@ NTSTATUS hk_NtQuerySystemInformation(ULONG SystemInformationClass, PVOID SystemI
 
 	printf("_____________________________\n\n");
 	return status;
+}
+
+void* DetourCreate(BYTE* src, CONST BYTE* dst, CONST INT len)
+{
+	BYTE* jmp = (BYTE*)malloc(len + 5);
+	DWORD dwback;
+	VirtualProtect(src, len, PAGE_READWRITE, &dwback);
+	memcpy(jmp, src, len);
+	jmp += len;
+	jmp[0] = 0xE9;
+	*(DWORD*)(jmp + 1) = (DWORD)(src + len - jmp) - 5;
+	src[0] = 0xE9;
+	*(DWORD*)(src + 1) = (DWORD)(dst - src) - 5;
+	for (INT i = 5; i < len; i++) src[i] = 0x90;
+	VirtualProtect(src, len, dwback, &dwback);
+
+	return(jmp - len);
 }
 
 DWORD WINAPI Thread_inicial(VOID)
@@ -72,7 +83,8 @@ DWORD WINAPI Thread_inicial(VOID)
 #else
 	//Do you detour for x32
 	//Its very easy
-	//
+	//DetourCreate(pfn_NtQuerySystemInformation,hk_NtQuerySystemInformation,5);
+	
 
 #endif
 
